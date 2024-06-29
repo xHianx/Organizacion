@@ -56,8 +56,13 @@ obtener_respuesta:
     li $t9, 's'
     beq $t1, $t2, end_game_loop
     beq $t1, $t9, comenzar_juego
-    la $a2, mensaje_continuar
-    j obtener_respuesta
+    la $a0, mensaje_error
+    li $v0, 2
+    syscall
+    j obtener_respuesta  # Ir a obtener_respuesta después del mensaje de error
+#    bne $t1, $t2, mensaje_continuar
+#   bne $t1, $t9, mensaje_continuar
+
 #    bne $t1, $t2, mensaje_continuar
 #   bne $t1, $t9, mensaje_continuar
 comenzar_juego:
