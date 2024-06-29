@@ -3,9 +3,9 @@ tablero: .space 12
 descubiertas: .space 12
 ultimosTresNumeros: .space 3
 contadorNumeros: .space 12  # Contadores para números del 1 al 12
-
-mensaje_inicio: .asciiz "\n¿Quieres empezar a girar la ruleta? (si/no): "
-mensaje_continuar: .asciiz "\n¿Quieres seguir jugando? (si/no): "
+mensaje_error: .asciiz "\n Solo se acepta (s/n) como respuesta: "
+mensaje_inicio: .asciiz "\n¿Quieres empezar a girar la ruleta? (s/n): "
+mensaje_continuar: .asciiz "\n¿Quieres seguir jugando? (s/n): "
 mensaje_tablero: .asciiz "Tablero: \n"
 mensaje_tesoro: .asciiz "\n¡Encontraste un tesoro!\n"
 mensaje_chacal: .asciiz "\n¡Encontraste un chacal!\n"
@@ -53,8 +53,14 @@ obtener_respuesta:
     la $t0, respuesta
     lb $t1, 0($t0)
     li $t2, 'n'
+    li $t9, 's'
     beq $t1, $t2, end_game_loop
-
+    beq $t1, $t9, comenzar_juego
+    la $a2, mensaje_continuar
+    j obtener_respuesta
+#    bne $t1, $t2, mensaje_continuar
+#   bne $t1, $t9, mensaje_continuar
+comenzar_juego:
     # Generar número aleatorio y mostrarlo
     li $a1, 12         # Límite superior del rango para syscall 42
     li $v0, 42
