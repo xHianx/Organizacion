@@ -3,9 +3,9 @@ tablero: .space 12
 descubiertas: .space 12
 ultimosTresNumeros: .space 3
 contadorNumeros: .space 12  # Contadores para números del 1 al 12
-mensaje_error: .asciiz "\n Solo se acepta (s/n) como respuesta: "
-mensaje_inicio: .asciiz "\n¿Quieres empezar a girar la ruleta? (s/n): "
-mensaje_continuar: .asciiz "\n¿Quieres seguir jugando? (s/n): "
+mensaje_error: .asciiz "\n Solo se acepta (1 = si/0 = no) como respuesta: "
+mensaje_inicio: .asciiz "\n¿Quieres empezar a girar la ruleta? (1 = si/0 = no): "
+mensaje_continuar: .asciiz "\n¿Quieres seguir jugando? (1 = si/0 = no): "
 mensaje_tablero: .asciiz "Tablero: \n"
 mensaje_tesoro: .asciiz "\n¡Encontraste un tesoro!\n"
 mensaje_chacal: .asciiz "\n¡Encontraste un chacal!\n"
@@ -50,19 +50,18 @@ obtener_respuesta:
     li $a1, 10
     syscall
 
+validar_respuesta:
     la $t0, respuesta
     lb $t1, 0($t0)
-    li $t2, 'n'
-    li $t9, 's'
+    li $t2, '0'
+    li $t9, '1'
     beq $t1, $t2, end_game_loop
     beq $t1, $t9, comenzar_juego
+
     la $a0, mensaje_error
     li $v0, 2
     syscall
     j obtener_respuesta  # Ir a obtener_respuesta después del mensaje de error
-#    bne $t1, $t2, mensaje_continuar
-#   bne $t1, $t9, mensaje_continuar
-
 #    bne $t1, $t2, mensaje_continuar
 #   bne $t1, $t9, mensaje_continuar
 comenzar_juego:
