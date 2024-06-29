@@ -61,9 +61,8 @@ obtener_respuesta:
     li $a1, 12         # Límite superior del rango para syscall 42
     li $v0, 42
     syscall
-    rem $t1, $v0, $a1
-    move $t3, $t1  # Guardar el valor generado
-    addi $t1, $t1, 1
+    move $t1, $a0      # Guardar el valor generado
+    addi $t1, $t1, 1   # Ajustar el número para que esté entre 1 y 12
     move $a0, $t1
     li $v0, 1
     syscall
@@ -71,7 +70,7 @@ obtener_respuesta:
     # Actualizar ultimosTresNumeros
     move $t5, $t6
     move $t6, $t7
-    move $t7, $t3
+    move $t7, $t1
 
     beq $t5, $t6, check_numbers_equal
     j valid_number
@@ -80,18 +79,18 @@ check_numbers_equal:
 valid_number:
 
     # Check if the cell was already discovered
-    lb $t2, descubiertas($t3)
+    lb $t2, descubiertas($t1)
     beqz $t2, mark_discovered
     addi $t4, $t4, 1
     bne $t4, 3, game_loop
     j end_game_discovered
 
 mark_discovered:
-    sb $zero, descubiertas($t3)
+    sb $zero, descubiertas($t1)
     li $t4, 0
 
     # Check if it's a treasure or a chacal
-    lb $t2, tablero($t3)
+    lb $t2, tablero($t1)
     li $t3, 'T'
     beq $t2, $t3, found_treasure
     jal found_chacal
