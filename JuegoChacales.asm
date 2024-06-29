@@ -1,298 +1,301 @@
 .data
-    board: .space 12       # Tablero con 12 casillas
-    discovered: .space 12  # Estado de las casillas descubiertas (0 no descubierta, 1 descubierta)
-    chacales: .word 4      # Número de chacales
-    tesoros: .word 8       # Número de tesoros
-    money: .word 0         # Dinero ganado
-    chacales_found: .word 0 # Chacales encontrados
-    discovered_count: .word 0 # Contador de casillas descubiertas
-    random_count: .word 0  # Contador de números aleatorios repetidos
-    previous_random: .word -1 # Almacena el número aleatorio anterior
-    money_msg: .asciiz "Dinero ganado: $"
+tablero: .space 12
+descubiertas: .space 12
+ultimosTresNumeros: .space 3
+contadorNumeros: .space 12  # Contadores para números del 1 al 12
+
+mensaje_inicio: .asciiz "\n¿Quieres empezar a girar la ruleta? (si/no): "
+mensaje_continuar: .asciiz "\n¿Quieres seguir jugando? (si/no): "
+mensaje_tablero: .asciiz "Tablero: \n"
+mensaje_tesoro: .asciiz "\n¡Encontraste un tesoro!\n"
+mensaje_chacal: .asciiz "\n¡Encontraste un chacal!\n"
+mensaje_ganar: .asciiz "\n¡Ganaste el juego! Encontraste los 4 tesoros.\n"
+mensaje_perder_chacales: .asciiz "\n¡Perdiste el juego! Encontraste los 4 chacales.\n"
+mensaje_perder_tres_iguales: .asciiz "\n¡Perdiste el juego! Tres veces el mismo número.\n"
+mensaje_descubierta: .asciiz "\nYa descubriste esta casilla, intenta otra.\n"
+mensaje_resultados: .asciiz "\nJuego terminado.\n"
+mensaje_chacales: .asciiz "\nChacales encontrados: "
+mensaje_tesoros: .asciiz "\nTesoros encontrados: "
+mensaje_dinero: .asciiz "\nDinero ganado: $"
+mensaje_numero_aleatorio: .asciiz "\nEl numero aleatorio que se genero es: "
+espacio: .asciiz " "
+dinero: .word 0
+tesoros: .word 0
+chacales: .word 0
+respuesta: .space 10
 
 .text
 .globl main
 
 main:
-    # Inicializar el tablero
-    jal initialize_board
+    jal inicializarTablero
+    li $t8, 1         # primerIntento
 
 game_loop:
-    # Mostrar el estado del tablero
-    jal display_board
-    # Generar un número aleatorio
-    jal generate_random_number
-    # Verificar si el número se ha generado tres veces seguidas
-    jal check_random_count
-    # Descubrir la casilla
-    jal discover_tile
-    # Verificar si el jugador ganó o perdió
-    jal check_game_status
-    # Preguntar al jugador si desea continuar o retirarse
-    jal ask_continue
-    # Repetir el ciclo del juego
+    jal mostrarTablero
+    jal mostrarEstadisticas
+
+    beq $t8, 1, primer_intento
+    la $a0, mensaje_continuar
+    j obtener_respuesta
+primer_intento:
+    la $a0, mensaje_inicio
+    li $t8, 0
+
+obtener_respuesta:
+    li $v0, 4
+    syscall
+    li $v0, 8
+    la $a0, respuesta
+    li $a1, 10
+    syscall
+
+    la $t0, respuesta
+    lb $t1, 0($t0)
+    li $t2, 'n'
+    beq $t1, $t2, end_game_loop
+
+    # Generar número aleatorio y mostrarlo
+    li $a1, 12         # Límite superior del rango para syscall 42
+    li $v0, 42
+    syscall
+    move $t1, $a0      # Guardar el valor generado
+    addi $t1, $t1, 1   # Ajustar el número para que esté entre 1 y 12
+
+    # Mostrar mensaje del número aleatorio
+    la $a0, mensaje_numero_aleatorio
+    li $v0, 4
+    syscall
+
+    # Mostrar el número generado
+    move $a0, $t1
+    li $v0, 1
+    syscall
+
+    # Incrementar el contador del número generado
+    subi $t3, $t1, 1  # Ajustar índice para contadorNumeros
+    lb $t4, contadorNumeros($t3)
+    addi $t4, $t4, 1
+    sb $t4, contadorNumeros($t3)
+
+    # Verificar si el número ha salido tres veces
+    li $t5, 3
+    beq $t4, $t5, end_game_equal_numbers
+
+    # Verificar si la casilla ya fue descubierta
+    subi $t1, $t1, 1  # Ajustar índice para descubiertas y tablero
+    lb $t2, descubiertas($t1)
+    bnez $t2, end_game_discovered
+
+    # Marcar la casilla como descubierta
+    li $t3, 1
+    sb $t3, descubiertas($t1)
+
+    # Check if it's a treasure or a chacal
+    lb $t2, tablero($t1)
+    li $t3, 'T'
+    beq $t2, $t3, found_treasure
+    jal found_chacal
+    j check_end_game
+
+found_treasure:
+    lw $t0, tesoros
+    addi $t0, $t0, 1  # tesorosEncontrados++
+    sw $t0, tesoros
+    lw $t1, dinero
+    addi $t1, $t1, 100 # dineroGanado += 100
+    sw $t1, dinero
+    la $a0, mensaje_tesoro
+    li $v0, 4
+    syscall
+    j check_end_game
+
+found_chacal:
+    lw $t0, chacales
+    addi $t0, $t0, 1  # chacalesEncontrados++
+    sw $t0, chacales
+    la $a0, mensaje_chacal
+    li $v0, 4
+    syscall
+
+check_end_game:
+    lw $t0, tesoros
+    li $t1, 4
+    beq $t0, $t1, end_game_win
+
+    lw $t0, chacales
+    li $t1, 4
+    beq $t0, $t1, end_game_lose_chacales
+
     j game_loop
-initialize_board:
-    # Inicializar el generador de números aleatorios
-    li $t0, 12      # Número de casillas en el tablero
-    li $t1, 4       # Número de chacales a colocar
-    li $t2, 8       # Número de tesoros a colocar
 
-    # Inicializar el tablero con ceros (vacío)
-    la $t3, board
-    li $t4, 0
-    li $t5, 12      # Contador de casillas
-init_loop:
-    sw $t4, 0($t3)
-    addi $t3, $t3, 4
-    addi $t5, $t5, -1
-    bnez $t5, init_loop
-
-    # Colocar chacales en el tablero
-place_chacales:
-    li $v0, 42      # Syscall para random
-    syscall
-    rem $t6, $a0, $t0   # $t6 = random % 12
-    la $t7, board
-    sll $t6, $t6, 2
-    add $t7, $t7, $t6
-    lw $t8, 0($t7)
-    bnez $t8, place_chacales  # Reintentar si la casilla ya está ocupada
-    li $t9, -1       # Representación de un chacal
-    sw $t9, 0($t7)
-    addi $t1, $t1, -1
-    bnez $t1, place_chacales
-
-    # Colocar tesoros en el tablero
-place_tesoros:
-    li $v0, 42      # Syscall para random
-    syscall
-    rem $t6, $a0, $t0   # $t6 = random % 12
-    la $t7, board
-    sll $t6, $t6, 2
-    add $t7, $t7, $t6
-    lw $t8, 0($t7)
-    bnez $t8, place_tesoros  # Reintentar si la casilla ya está ocupada
-    li $t9, 1        # Representación de un tesoro
-    sw $t9, 0($t7)
-    addi $t2, $t2, -1
-    bnez $t2, place_tesoros
-
-    jr $ra
-
-    display_board:
-    la $t0, board         # Apuntador al tablero
-    la $t1, discovered    # Apuntador al estado de casillas descubiertas
-    li $t2, 0             # Índice del tablero
-    li $t3, 12            # Número de casillas
-
-    display_loop:
-    lw $t4, 0($t1)        # Cargar el estado de la casilla (descubierta o no)
-    lw $t5, 0($t0)        # Cargar el contenido de la casilla (chacal, tesoro, vacío)
-    beq $t4, 0, display_hidden
-
-    # Mostrar casilla descubierta
-    beq $t5, -1, display_chacal
-    beq $t5, 1, display_tesoro
-    j display_empty
-
-    display_hidden:
-    # Mostrar casilla oculta
+end_game_equal_numbers:
+    # Si se encuentran tres veces el mismo número, se pierde el juego y se reinicia el dinero ganado
+    sw $zero, dinero
+    la $a0, mensaje_perder_tres_iguales
     li $v0, 4
-    la $a0, hidden_msg
     syscall
-    j next_tile
+    j end_game
 
-    display_chacal:
-    # Mostrar chacal
+end_game_discovered:
+    la $a0, mensaje_descubierta
     li $v0, 4
-    la $a0, chacal_msg
     syscall
-    j next_tile
+    j game_loop
 
-    display_tesoro:
-    # Mostrar tesoro
+end_game_win:
+    la $a0, mensaje_ganar
     li $v0, 4
-    la $a0, tesoro_msg
     syscall
-    j next_tile
+    j end_game
 
-    display_empty:
-    # Mostrar casilla vacía
+end_game_lose_chacales:
+    # Si se encuentran los 4 chacales, se pierde el juego y se reinicia el dinero ganado
+    sw $zero, dinero
+    la $a0, mensaje_perder_chacales
     li $v0, 4
-    la $a0, empty_msg
     syscall
+    j end_game
 
-    next_tile:
-    addi $t0, $t0, 4      # Siguiente casilla del tablero
-    addi $t1, $t1, 4      # Siguiente estado de casilla
-    addi $t2, $t2, 1
-    blt $t2, $t3, display_loop
-
-    # Mostrar el dinero ganado
-    li $v0, 4
-    la $a0, money_msg
-    syscall
-    lw $a0, money
-    li $v0, 1
-    syscall
-
-    # Mostrar los chacales encontrados
-    li $v0, 4
-    la $a0, chacales_found_msg
-    syscall
-    lw $a0, chacales_found
-    li $v0, 1
-    syscall
-
-    jr $ra
-
-.data
-hidden_msg: .asciiz " [*] "
-chacal_msg: .asciiz " [C] "
-tesoro_msg: .asciiz " [T] "
-empty_msg: .asciiz " [ ] "
-#money_msg: .asciiz "\nDinero ganado: $"
-chacales_found_msg: .asciiz "\nChacales encontrados: "
-
-
-generate_random_number:
-    li $v0, 42      # Syscall para random
-    syscall
-    rem $a0, $a0, 12 # Generar número aleatorio entre 0 y 11
-    addi $a0, $a0, 1 # Ajustar a rango de 1 a 12
-    lw $t0, previous_random
-    beq $a0, $t0, increment_random_count
-    li $t1, 1
-    sw $t1, random_count
-    sw $a0, previous_random
-    jr $ra
-
-increment_random_count:
-    lw $t1, random_count
-    addi $t1, $t1, 1
-    sw $t1, random_count
-    jr $ra
-
-check_random_count:
-    lw $t1, random_count
-    li $t2, 3
-    bne $t1, $t2, end_check_random_count
-    jal player_lost
-    j end_check_random_count
-
-end_check_random_count:
-    jr $ra
-
-discover_tile:
-    lw $t0, board
-    sll $a0, $a0, 2
-    add $t0, $t0, $a0
-    lw $t1, 0($t0)
-    bnez $t1, end_discover_tile
-    sw $t1, discovered
-    lw $t2, discovered_count
-    addi $t2, $t2, 1
-    sw $t2, discovered_count
-    li $t3, 0
-    sw $t3, random_count
-    j end_discover_tile
-
-end_discover_tile:
-    jr $ra
-
-check_game_status:
-    lw $t0, chacales_found
-    lw $t1, discovered_count
-    
-    # Verificar si el jugador ha encontrado 4 tesoros
-    li $t2, 4
-    beq $t1, $t2, player_won
-    
-    # Verificar si el jugador ha encontrado todos los chacales
-    li $t3, 4
-    beq $t0, $t3, player_lost
-    
-    # Continuar el juego
-    jr $ra
-
-player_won:
-    # Mostrar mensaje de victoria
-    li $v0, 4
-    la $a0, win_msg
-    syscall
-    
-    # Mostrar el dinero ganado
-    li $v0, 4
-    la $a0, money_msg
-    syscall
-    lw $a0, money
-    li $v0, 1
-    syscall
-    
-    # Terminar el programa
-    li $v0, 10
-    syscall
-
-player_lost:
-    # Mostrar mensaje de derrota
-    li $v0, 4
-    la $a0, lose_msg
-    syscall
-    
-    # Mostrar el dinero ganado
-    li $v0, 4
-    la $a0, money_msg
-    syscall
-    lw $a0, money
-    li $v0, 1
-    syscall
-    
-    # Terminar el programa
-    li $v0, 10
-    syscall
-
-.data
-win_msg: .asciiz "\\n¡Ganaste! Has encontrado 4 tesoros.\\n"
-lose_msg: .asciiz "\\nPerdiste. Has encontrado todos los chacales.\\n"
-
-ask_continue:
-    # Mostrar mensaje preguntando al jugador si desea continuar
-    li $v0, 4
-    la $a0, continue_msg
-    syscall
-
-    # Leer la respuesta del jugador (1 para continuar, 0 para retirarse)
-    li $v0, 5
-    syscall
-    move $t0, $v0
-
-    # Verificar la respuesta del jugador
-    beq $t0, 1, continue_game
-    beq $t0, 0, end_game
-
-continue_game:
-    # Continuar el juego
-    jr $ra
+end_game_loop:
+    jal mostrarTablero  # Mostrar el tablero actualizado
+    jal mostrarResultados
+    j exit
 
 end_game:
-    # Mostrar mensaje de retiro
+    jal mostrarTablero  # Mostrar el tablero actualizado
+    jal mostrarResultados
+    j exit
+
+mostrarEstadisticas:
+    la $a0, mensaje_dinero
     li $v0, 4
-    la $a0, quit_msg
     syscall
-    
-    # Mostrar el dinero ganado
+    lw $a0, dinero
+    li $v0, 1
+    syscall
+    la $a0, espacio
     li $v0, 4
-    la $a0, money_msg
     syscall
-    lw $a0, money
+
+    la $a0, mensaje_chacales
+    li $v0, 4
+    syscall
+    lw $a0, chacales
+    li $v0, 1
+    syscall
+    la $a0, espacio
+    li $v0, 4
+    syscall
+
+    la $a0, mensaje_tesoros
+    li $v0, 4
+    syscall
+    lw $a0, tesoros
+    li $v0, 1
+    syscall
+    la $a0, espacio
+    li $v0, 4
+    syscall
+
+    jr $ra
+
+mostrarTablero:
+    la $a0, mensaje_tablero
+    li $v0, 4
+    syscall
+
+    # Imprimir el estado del tablero
+    li $t0, 0
+mostrar_loop:
+    bge $t0, 12, fin_mostrar
+    lb $t1, descubiertas($t0)
+    beqz $t1, print_unknown
+    lb $a0, tablero($t0)
+    j print_char
+print_unknown:
+    li $a0, '?'
+print_char:
+    li $v0, 11
+    syscall
+    li $a0, ' '
+    li $v0, 11
+    syscall
+    addi $t0, $t0, 1
+    j mostrar_loop
+fin_mostrar:
+    li $a0, '\n'
+    li $v0, 11
+    syscall
+    jr $ra
+
+mostrarResultados:
+    la $a0, mensaje_resultados
+    li $v0, 4
+    syscall
+
+    la $a0, mensaje_chacales
+    li $v0, 4
+    syscall
+    lw $a0, chacales
     li $v0, 1
     syscall
 
-    # Terminar el programa
-    li $v0, 10
+    la $a0, mensaje_tesoros
+    li $v0, 4
+    syscall
+    lw $a0, tesoros
+    li $v0, 1
     syscall
 
-.data
-continue_msg: .asciiz "\\n¿Deseas continuar jugando? (1 para Sí, 0 para No): "
-quit_msg: .asciiz "\\nTe has retirado del juego.\\n"
+    la $a0, mensaje_dinero
+    li $v0, 4
+    syscall
+    lw $a0, dinero
+    li $v0, 1
+    syscall
+
+    jr $ra
+
+inicializarTablero:
+    # Inicializar tablero con 'T'
+    li $t0, 0
+    li $t1, 'T'
+loop_init_tesoros:
+    bge $t0, 8, fin_init_tesoros
+    sb $t1, tablero($t0)
+    addi $t0, $t0, 1
+    j loop_init_tesoros
+fin_init_tesoros:
+
+    # Inicializar tablero con 'C'
+    li $t1, 'C'
+loop_init_chacales:
+    bge $t0, 12, fin_init_chacales
+    sb $t1, tablero($t0)
+    addi $t0, $t0, 1
+    j loop_init_chacales
+fin_init_chacales:
+
+    # Barajar el tablero
+    li $t2, 12  # TOTAL_CASILLAS
+    li $t3, 0
+shuffle_loop:
+    bge $t3, 12, fin_shuffle
+    li $a1, 12         # Límite superior del rango para syscall 42
+    li $v0, 42         # Random number syscall
+    syscall
+    rem $t4, $v0, $t2  # j = rand() % 12
+    mul $t5, $t4, 1
+    lb $t6, tablero($t3)   # temp = tablero[i]
+    lb $t7, tablero($t5)   # tablero[i] = tablero[j]
+    sb $t7, tablero($t3)
+    sb $t6, tablero($t5)   # tablero[j] = temp
+    addi $t3, $t3, 1
+    j shuffle_loop
+fin_shuffle:
+    jr $ra
+
+exit:
+    li $v0, 10
+    syscall
